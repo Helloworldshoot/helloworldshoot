@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Angry Hello World with Defense Line</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #0a0a0a;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    position: relative;
+  }
+  #hello {
+    position: absolute;
+    font-size: 3em;
+    color: white;
+    text-shadow: 2px 2px 10px gold;
+    cursor: grab;
+    user-select: none;
+    left: 100px;
+    top: 300px;
+    z-index: 10;
+    transition: color 0.5s ease, background-image 0.5s ease;
+  }
+  #line {
+    position: absolute;
+    background: gold;
+    height: 3px;
+    border-radius: 2px;
+    pointer-events: none;
+    display: none;
+  }
+  #score {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    color: white;
+    font-size: 1.5em;
+    font-weight: bold;
+    user-select: none;
+    z-index: 100;
+  }
+  #skinsBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color: white;
+    background: darkslateblue;
+    border: none;
+    font-size: 1em;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 100;
+  }
+  #skinPopup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    display: none;
+    z-index: 9999;
+    max-width: 300px;
+    box-sizing: border-box;
+  }
+  #skinPopup button {
+    margin: 4px 4px 4px 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    background-color: #444;
+    color: white;
+    transition: background-color 0.3s ease;
+  }
+  #skinPopup button:hover {
+    background-color: #666;
+  }
+  .target, .target-square {
+    position: absolute;
+    user-select: none;
+  }
+  .target {
+    width: 80px;
+    height: 80px;
+    background: crimson;
+    border-radius: 50%;
+    box-shadow: 0 0 15px crimson;
+  }
+  .target-square {
+    width: 80px;
+    height: 80px;
+    background: royalblue;
+    box-shadow: 0 0 15px royalblue;
+  }
+  .health-bar {
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: rgba(255,255,255,0.2);
+  }
+  .health-fill {
+    height: 100%;
+    background: limegreen;
+    width: 100%;
+  }
+  #defenseLine {
+    position: absolute;
+    left: 190px;
+    top: 0;
+    width: 5px;
+    height: 100vh;
+    background: rgba(255, 215, 0, 0.4);
+    z-index: 20;
+  }
+</style>
+</head>
+<body>
+  <div id="hello">Hello World!</div>
+  <div id="line"></div>
+  <div id="score">Score: 0</div>
+  <button id="skinsBtn">🎁 스킨 뽑기</button>
+  <div id="skinPopup"></div>
+  <div id="defenseLine"></div>
+<script>
+const hello = document.getElementById('hello');
+const line = document.getElementById('line');
+const scoreDiv = document.getElementById('score');
+const defenseLine = document.getElementById('defenseLine');
+const skinsBtn = document.getElementById('skinsBtn');
+const skinPopup = document.getElementById('skinPopup');
+
+let score = 100;
+const targets = [];
+const baseZone = 50;
+let paused = false;
+let isDragging = false;
+let startX, startY;
+let velocityX = 0, velocityY = 0;
+let posX = parseFloat(hello.style.left) || 100;
+let posY = parseFloat(hello.style.top) || 300;
+const gravity = 0.5;
+let bounce = 0.7;
+let friction = 0.98;
+let launched = false;
+let hitId = 1;
+
+const skins = [
+  { name: "기본", rarity: "common", color: "white" },
+  { name: "빨강", rarity: "common", color: "red" },
+  { name: "파랑", rarity: "common", color: "blue" },
+  { name: "초록", rarity: "common", color: "green" },
+  { name: "노랑", rarity: "common", color: "yellow" },
+  { name: "보라", rarity: "common", color: "purple" },
+  { name: "검정", rarity: "rare", color: "black" },
+  { name: "청록", rarity: "rare", color: "teal" },
+  { name: "핑크", rarity: "rare", color: "pink" },
+  { name: "레인보우", rarity: "legendary", color: "linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet)" }
+];
+
+let ownedSkins = ["기본"];
+let selectedSkin = "기본";
+
+function openSkinPopup() {
+  paused = true;
+  skinPopup.innerHTML = `<h3>스킨 뽑기</h3>`;
+
+  if(score >= 10){
+    score -= 10;
+    scoreDiv.textContent = 'Score: ' + score;
+
+    const picked = skins[Math.floor(Math.random() * skins.length)];
+    const isDup = ownedSkins.includes(picked.name);
+
+    if (!isDup) {
+      ownedSkins.push(picked.name);
+      skinPopup.innerHTML += `<p>🎉 새 스킨 획득! ${picked.name} (${picked.rarity})</p>`;
+    } else {
+      score += 2;
+      scoreDiv.textContent = 'Score: ' + score;
+      skinPopup.innerHTML += `<p>🔁 중복 스킨! 2점 획득 (${picked.name})</p>`;
+    }
+  } else {
+    skinPopup.innerHTML += `<p>점수가 부족합니다! (10점 필요)</p>`;
+  }
+
+  skinPopup.innerHTML += `<h4>보유 스킨 (선택 가능)</h4>`;
+  ownedSkins.forEach(skinName => {
+    skinPopup.innerHTML += `<button onclick="selectSkin('${skinName}')">${skinName}</button> `;
+  });
+
+  skinPopup.innerHTML += `<br><br><button onclick="closeSkinPopup()">닫기</button>`;
+  skinPopup.style.display = "block";
+}
+
+function closeSkinPopup(){
+  skinPopup.style.display = "none";
+  paused = false;
+  // animate() 중복 호출 막기 위해 호출하지 않음
+}
+
+function selectSkin(name){
+  selectedSkin = name;
+  const s = skins.find(skin => skin.name === name);
+  if(s){
+    if(s.color.includes("gradient")){
+      hello.style.color = "white";
+      hello.style.backgroundImage = s.color;
+      hello.style.webkitBackgroundClip = "text";
+      hello.style.webkitTextFillColor = "transparent";
+    } else {
+      hello.style.color = s.color;
+      hello.style.backgroundImage = "";
+      hello.style.webkitBackgroundClip = "";
+      hello.style.webkitTextFillColor = "";
+    }
+  }
+}
+
+skinsBtn.addEventListener("click", openSkinPopup);
+
+function createTarget() {
+  if (targets.length >= 7 || paused) return;
+  const isSquare = Math.random() < 0.2;
+  const t = document.createElement('div');
+  if (isSquare) {
+    t.classList.add('target-square');
+    t.dataset.score = 2;
+  } else {
+    t.classList.add('target');
+    t.dataset.score = 1;
+  }
+  t.dataset.hp = 3;
+  t.dataset.lastHit = '0';
+  t.style.left = (window.innerWidth + 50) + 'px';
+  t.style.top = (Math.random() * (window.innerHeight - 130) + 50) + 'px';
+
+  const healthBar = document.createElement('div');
+  healthBar.className = 'health-bar';
+  const healthFill = document.createElement('div');
+  healthFill.className = 'health-fill';
+  healthBar.appendChild(healthFill);
+  t.appendChild(healthBar);
+
+  document.body.appendChild(t);
+  targets.push(t);
+}
+
+for (let i = 0; i < 3; i++) createTarget();
+setInterval(() => { if (!paused) createTarget(); }, 3000);
+
+function reset() {
+  launched = false;
+  velocityX = velocityY = 0;
+  bounce = 0.7;
+  posX = 100;
+  posY = 300;
+  hello.style.left = posX + 'px';
+  hello.style.top = posY + 'px';
+  hello.style.cursor = 'grab';
+  hitId++;
+}
+
+hello.addEventListener('mousedown', (e) => {
+  if (launched || e.clientX > window.innerWidth / 2 || paused) return;
+  isDragging = true;
+  startX = e.clientX;
+  startY = e.clientY;
+  line.style.display = 'block';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const dx = startX - e.clientX;
+  const dy = startY - e.clientY;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  line.style.width = length + 'px';
+  line.style.left = startX + 'px';
+  line.style.top = startY + 'px';
+  line.style.transformOrigin = '0 50%';
+  line.style.transform = `rotate(${angle}deg)`;
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!isDragging) return;
+  isDragging = false;
+  line.style.display = 'none';
+  velocityX = (startX - e.clientX) * 0.3;
+  velocityY = (startY - e.clientY) * 0.3;
+  launched = true;
+  hello.style.cursor = 'default';
+});
+
+function checkCollision(circleX, circleY, radius, rect) {
+  const rectX = rect.offsetLeft;
+  const rectY = rect.offsetTop;
+  const rectW = rect.offsetWidth;
+  const rectH = rect.offsetHeight;
+  const closestX = Math.max(rectX, Math.min(circleX, rectX + rectW));
+  const closestY = Math.max(rectY, Math.min(circleY, rectY + rectH));
+  const distX = circleX - closestX;
+  const distY = circleY - closestY;
+  return Math.sqrt(distX * distX + distY * distY) < radius;
+}
+
+let animationRunning = false;
+
+function animate() {
+  if (animationRunning) return; // 중복 실행 방지
+  animationRunning = true;
+
+  function loop() {
+    if (paused) {
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    for (let i = targets.length - 1; i >= 0; i--) {
+      let t = targets[i];
+      let currentLeft = parseFloat(t.style.left);
+      currentLeft -= 0.3;
+      if (currentLeft < baseZone) {
+        t.remove();
+        targets.splice(i, 1);
+        score = Math.max(0, score - 1);
+        scoreDiv.textContent = 'Score: ' + score;
+      } else {
+        t.style.left = currentLeft + 'px';
+      }
+    }
+
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i];
+      const targetLeft = parseFloat(t.style.left);
+      const targetRight = targetLeft + t.offsetWidth;
+      const defenseLeft = defenseLine.offsetLeft;
+      const defenseRight = defenseLeft + defenseLine.offsetWidth;
+      if (targetRight > defenseLeft && targetLeft < defenseRight) {
+        t.remove();
+        targets.splice(i, 1);
+        score = Math.max(0, score - 1);
+        scoreDiv.textContent = 'Score: ' + score;
+      }
+    }
+
+    if (launched) {
+      velocityY += gravity;
+      velocityX *= friction;
+      velocityY *= friction;
+      posX += velocityX;
+      posY += velocityY;
+      const radius = hello.offsetWidth / 2;
+
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        if (checkCollision(posX + radius, posY + radius, radius, t)) {
+          if (t.dataset.lastHit != hitId) {
+            t.dataset.lastHit = hitId;
+            let hp = parseInt(t.dataset.hp);
+            hp--;
+            t.dataset.hp = hp;
+            let healthFill = t.querySelector('.health-fill');
+            if (healthFill) healthFill.style.width = (hp / 3 * 100) + '%';
+            if (hp <= 0) {
+              score += parseInt(t.dataset.score || '1');
+              scoreDiv.textContent = 'Score: ' + score;
+              t.remove();
+              targets.splice(i, 1);
+            }
+            bounce = Math.min(1, bounce + 0.1);
+            velocityX *= -bounce;
+            velocityY *= -bounce;
+          }
+        }
+      }
+
+      if (posY + hello.offsetHeight > window.innerHeight) {
+        posY = window.innerHeight - hello.offsetHeight;
+        velocityY *= -bounce;
+        velocityX *= bounce;
+        bounce *= 0.95;
+      }
+      if (posX < 0) {
+        posX = 0;
+        velocityX *= -bounce;
+        bounce *= 0.95;
+      }
+      if (posX + hello.offsetWidth > window.innerWidth) {
+        posX = window.innerWidth - hello.offsetWidth;
+        velocityX *= -bounce;
+        bounce *= 0.95;
+      }
+      hello.style.left = posX + 'px';
+      hello.style.top = posY + 'px';
+
+      if (bounce < 0.1 && posY + hello.offsetHeight >= window.innerHeight - 1) {
+        reset();
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+}
+
+animate();
+reset();
+
+document.addEventListener("visibilitychange", () => {
+  paused = document.hidden;
+  if (!paused) animate();
+});
+
+window.addEventListener('resize', () => {
+  targets.forEach(t => t.remove());
+  targets.length = 0;
+  for (let i = 0; i < 3; i++) createTarget();
+});
+</script>
+</body>
+</html>
