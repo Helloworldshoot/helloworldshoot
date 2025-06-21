@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Angry Hello World with Defense Line - Start</title>
+<style>
+  body {
+    margin: 0; padding: 0;
+    background-color: #0a0a0a;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    user-select: none;
+  }
+  h1 { text-align: center; padding-top: 40px; }
+  #scoreDisplay, #starDisplay {
+    text-align: center;
+    font-size: 1.5em;
+  }
+  #helloPreview {
+    font-size: 5em;
+    margin: 30px auto;
+    text-align: center;
+    user-select: none;
+    transition: color 0.5s ease, background-image 0.5s ease, font-family 0.5s ease;
+  }
+  #buttons {
+    text-align: center;
+    margin: 20px;
+  }
+  button {
+    font-size: 1em;
+    padding: 10px 20px;
+    margin: 5px;
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #333;
+    color: white;
+    border: none;
+  }
+  #popup {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    padding: 20px;
+    border-radius: 10px;
+    display: none;
+    z-index: 1000;
+    max-width: 90vw;
+    color: white;
+  }
+  #popup h3 { margin-top: 0; }
+  #popup button.skin {
+    display: inline-block;
+    margin: 5px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background-color: #444;
+    position: relative;
+  }
+  .checkmark {
+    position: absolute;
+    top: -5px; right: -5px;
+    background: lime;
+    color: black;
+    border-radius: 50%;
+    width: 18px; height: 18px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+<h1>Hello World! 슈팅 게임 (Made by 범서) Ver 1.41</h1>
+<div id="scoreDisplay">Score: 0</div>
+<div id="starDisplay">초월 횟수: 0 ⭐</div>
+<!-- 추가: Hello World! 미리보기 -->
+<div id="helloPreview">Hello World!</div>
+
+<div id="buttons">
+  <button onclick="location.href='game.html'">▶️ 게임 시작</button>
+  <button onclick="showSkinCollection()">🎁 일반 스킨 뽑기</button>
+  <button onclick="showTransCollection()">🌌 초월 스킨 보기</button>
+  <button onclick="tryTranscendence()">✨ 초월하기</button>
+</div>
+<div id="popup"></div>
+
+<script>
+const popup = document.getElementById('popup');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const starDisplay = document.getElementById('starDisplay');
+const helloPreview = document.getElementById('helloPreview');
+
+let score = parseInt(localStorage.getItem('lastScore')) || 0;
+let ownedSkins = JSON.parse(localStorage.getItem('helloSkins')) || ['기본'];
+let selectedSkin = localStorage.getItem('helloSelectedSkin') || '기본';
+let selectedTransSkin = localStorage.getItem('helloSelectedTransSkin') || '';
+let transSkins = JSON.parse(localStorage.getItem('transSkins')) || [];
+let transCount = parseInt(localStorage.getItem('transCount')) || 0;
+
+scoreDisplay.textContent = 'Score: ' + score;
+starDisplay.textContent = `초월 횟수: ${transCount} ⭐`;
+
+const skins = [
+  { name: "기본", rarity: "common", color: "white" },
+  { name: "빨강", rarity: "common", color: "red" },
+  { name: "파랑", rarity: "common", color: "blue" },
+  { name: "초록", rarity: "common", color: "green" },
+  { name: "노랑", rarity: "common", color: "yellow" },
+  { name: "보라", rarity: "common", color: "purple" },
+  { name: "검정", rarity: "rare", color: "black" },
+  { name: "청록", rarity: "rare", color: "teal" },
+  { name: "핑크", rarity: "rare", color: "pink" },
+  { name: "레인보우", rarity: "legendary", color: "linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet)" }
+];
+
+const transcendSkins = [
+  { name: "초월-불꽃", color: "orangered", font: "Impact" },
+  { name: "초월-빙결", color: "deepskyblue", font: "Arial Black" },
+  { name: "초월-번개", color: "gold", font: "Courier New" },
+  { name: "초월-대지", color: "saddlebrown", font: "Georgia" },
+  { name: "초월-폭풍", color: "slateblue", font: "Verdana" },
+  { name: "초월-어둠", color: "black", font: "Trebuchet MS" },
+  { name: "초월-빛", color: "white", font: "Lucida Console" },
+  { name: "초월-독", color: "purple", font: "Comic Sans MS" },
+  { name: "초월-시간", color: "silver", font: "Tahoma" },
+  { name: "초월-공간", color: "navy", font: "Palatino Linotype" },
+  { name: "초월-정령", color: "forestgreen", font: "Garamond" },
+  { name: "초월-금속", color: "gray", font: "Futura" },
+  { name: "초월-음속", color: "cyan", font: "Segoe UI" },
+  { name: "초월-용암", color: "crimson", font: "Rockwell" },
+  { name: "초월-눈보라", color: "lightblue", font: "Calibri" },
+  { name: "초월-환상", color: "mediumorchid", font: "Brush Script MT" },
+  { name: "초월-기계", color: "darkgray", font: "Roboto Mono" },
+  { name: "초월-유성", color: "firebrick", font: "Orbitron" },
+  { name: "초월-바다", color: "teal", font: "Quicksand" },
+  { name: "초월-우주", color: "darkslateblue", font: "Exo 2" }
+];
+
+// 스킨 적용 함수 (미리보기용)
+function applyPreviewSkin() {
+  if (selectedTransSkin) {
+    const tSkin = transcendSkins.find(s => s.name === selectedTransSkin);
+    if (tSkin) {
+      helloPreview.style.color = tSkin.color;
+      helloPreview.style.fontFamily = tSkin.font;
+      helloPreview.style.backgroundImage = 'none';
+      helloPreview.style.webkitBackgroundClip = '';
+      helloPreview.style.webkitTextFillColor = '';
+      return;
+    }
+  }
+  // 일반 스킨 적용
+  const skin = skins.find(s => s.name === selectedSkin);
+  if (skin) {
+    if (skin.name === '레인보우') {
+      helloPreview.style.backgroundImage = skin.color;
+      helloPreview.style.webkitBackgroundClip = "text";
+      helloPreview.style.webkitTextFillColor = "transparent";
+      helloPreview.style.color = 'unset';
+      helloPreview.style.fontFamily = '';
+    } else {
+      helloPreview.style.backgroundImage = 'none';
+      helloPreview.style.webkitBackgroundClip = '';
+      helloPreview.style.webkitTextFillColor = '';
+      helloPreview.style.color = skin.color;
+      helloPreview.style.fontFamily = '';
+    }
+  } else {
+    // 기본 fallback
+    helloPreview.style.color = 'white';
+    helloPreview.style.fontFamily = '';
+    helloPreview.style.backgroundImage = 'none';
+    helloPreview.style.webkitBackgroundClip = '';
+    helloPreview.style.webkitTextFillColor = '';
+  }
+}
+
+function showSkinCollection() {
+  popup.innerHTML = `<h3>보유 일반 스킨</h3>`;
+  ownedSkins.forEach(skinName => {
+    popup.innerHTML += `<button class="skin" onclick="chooseSkin('${skinName}')">${skinName}${selectedSkin === skinName && !selectedTransSkin ? '<span class="checkmark">✔</span>' : ''}</button>`;
+  });
+  popup.innerHTML += `<br><br><button onclick="drawSkin()">🔁 스킨 뽑기 (10점)</button>`;
+  popup.innerHTML += `<br><button onclick="closePopup()">닫기</button>`;
+  popup.style.display = 'block';
+}
+
+function showTransCollection() {
+  popup.innerHTML = `<h3>보유 초월 스킨</h3>`;
+  if (transSkins.length === 0) {
+    popup.innerHTML += `<p>❌ 아직 초월 스킨이 없습니다.</p>`;
+  } else {
+    transSkins.forEach(skin => {
+      popup.innerHTML += `<button class="skin" onclick="chooseTransSkin('${skin.name}')">🌠 ${skin.name}${selectedTransSkin === skin.name ? '<span class="checkmark">✔</span>' : ''}</button>`;
+    });
+  }
+  popup.innerHTML += `<br><button onclick="closePopup()">닫기</button>`;
+  popup.style.display = 'block';
+}
+
+function drawSkin() {
+  if (score < 10) {
+    alert("점수가 부족합니다! (10점 필요)");
+    return;
+  }
+  score -= 10;
+  const picked = skins[Math.floor(Math.random() * skins.length)];
+  if (!ownedSkins.includes(picked.name)) {
+    ownedSkins.push(picked.name);
+    alert(`🎉 새 스킨 획득! ${picked.name}`);
+  } else {
+    score += 2;
+    alert(`🔁 중복! 2점 반환 (${picked.name})`);
+  }
+  saveState();
+  updateDisplay();
+  showSkinCollection();
+}
+
+function chooseSkin(name) {
+  selectedSkin = name;
+  selectedTransSkin = '';  // 일반 스킨 선택 시 초월 스킨 해제
+  saveState();
+  applyPreviewSkin();
+  showSkinCollection();
+}
+
+function chooseTransSkin(name) {
+  selectedTransSkin = name;
+  selectedSkin = '기본';   // 초월 스킨 선택 시 일반 스킨은 기본으로 설정
+  saveState();
+  applyPreviewSkin();
+  showTransCollection();
+}
+
+function tryTranscendence() {
+  // 일반 스킨 모두 보유 여부 확인 (skins 배열 기준)
+  const allOwned = skins.every(s => ownedSkins.includes(s.name));
+  if (!allOwned) {
+    alert("⚠️ 일반 스킨 10종을 모두 보유해야 초월할 수 있습니다.");
+    return;
+  }
+  // 아직 획득하지 않은 초월 스킨 중 하나 획득
+  const remaining = transcendSkins.filter(ts => !transSkins.some(t => t.name === ts.name));
+  if (remaining.length === 0) {
+    alert("🌟 초월 스킨을 모두 획득했습니다!");
+    return;
+  }
+  const pick = remaining[Math.floor(Math.random() * remaining.length)];
+  transSkins.push(pick);
+  transCount++;
+  // 일반 스킨 초기화
+  ownedSkins = ['기본'];
+  selectedSkin = '기본';
+  selectedTransSkin = '';
+  alert(`✨ 초월 성공! '${pick.name}' 스킨 획득!`);
+  saveState();
+  updateDisplay();
+  applyPreviewSkin();
+}
+
+function closePopup() {
+  popup.style.display = 'none';
+}
+
+function saveState() {
+  localStorage.setItem('helloSkins', JSON.stringify(ownedSkins));
+  localStorage.setItem('helloSelectedSkin', selectedSkin);
+  localStorage.setItem('helloSelectedTransSkin', selectedTransSkin);
+  localStorage.setItem('transSkins', JSON.stringify(transSkins));
+  localStorage.setItem('transCount', transCount);
+  localStorage.setItem('lastScore', score);
+}
+
+function updateDisplay() {
+  scoreDisplay.textContent = 'Score: ' + score;
+  starDisplay.textContent = `초월 횟수: ${transCount} ⭐`;
+}
+
+// 초기 표시
+updateDisplay();
+applyPreviewSkin();
+</script>
+</body>
+</html>

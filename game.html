@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Hello World Shoot</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #0a0a0a;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    position: relative;
+    touch-action: none; /* 모바일 터치 방지 */
+    font-size: 16px; /* 모바일 대응 폰트 */
+  }
+  #hello {
+    position: absolute;
+    font-size: 3.5em;
+    color: white;
+    text-shadow: 2px 2px 10px gold;
+    cursor: grab;
+    user-select: none;
+    left: 100px;
+    top: 300px;
+    z-index: 10;
+    transition: color 0.5s ease, background-image 0.5s ease;
+  }
+  #line {
+    position: absolute;
+    background: gold;
+    height: 3px;
+    border-radius: 2px;
+    pointer-events: none;
+    display: none;
+  }
+  #score {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    color: white;
+    font-size: 2em;
+    font-weight: bold;
+    user-select: none;
+    z-index: 100;
+  }
+  .target, .target-square {
+    position: absolute;
+    user-select: none;
+    width: 80px;
+    height: 80px;
+  }
+  .target {
+    background: crimson;
+    border-radius: 50%;
+    box-shadow: 0 0 15px crimson;
+  }
+  .target-square {
+    background: royalblue;
+    box-shadow: 0 0 15px royalblue;
+  }
+  .health-bar {
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: rgba(255,255,255,0.2);
+  }
+  .health-fill {
+    height: 100%;
+    background: limegreen;
+    width: 100%;
+  }
+  #defenseLine {
+    position: absolute;
+    left: 190px;
+    top: 0;
+    width: 5px;
+    height: 100vh;
+    background: rgba(255, 215, 0, 0.4);
+    z-index: 20;
+  }
+</style>
+</head>
+<body>
+<div id="hello">Hello World!</div>
+<div id="line"></div>
+<div id="score">Score: 0</div>
+<div id="defenseLine"></div>
+<script>
+const hello = document.getElementById('hello');
+const line = document.getElementById('line');
+const scoreDiv = document.getElementById('score');
+const defenseLine = document.getElementById('defenseLine');
+
+let score = 10000;
+let totalScore = parseInt(localStorage.getItem('lastScore')) || 0;
+const targets = [];
+const baseZone = 50;
+let paused = false;
+let isDragging = false;
+let startX, startY;
+let velocityX = 0, velocityY = 0;
+let posX = parseFloat(hello.style.left) || 100;
+let posY = parseFloat(hello.style.top) || 300;
+const gravity = 0.5;
+let bounce = 0.7;
+let friction = 0.98;
+let launched = false;
+let hitId = 1;
+
+function showGameOver() {
+  paused = true;
+  totalScore += score;
+  localStorage.setItem('lastScore', totalScore);
+
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.background = 'rgba(0,0,0,0.85)';
+  overlay.style.display = 'flex';
+  overlay.style.flexDirection = 'column';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.color = 'white';
+  overlay.style.fontSize = '2em';
+  overlay.innerHTML = `게임 오버!<br><br>누적 점수: ${totalScore}<br><button style="margin-top:20px;font-size:1em;padding:10px 20px;cursor:pointer" onclick="location.href='start.html'">시작화면으로 돌아가기</button>`;
+  document.body.appendChild(overlay);
+}
+
+function createTarget() {
+  if (targets.length >= 7 || paused) return;
+  const isSquare = Math.random() < 0.2;
+  const t = document.createElement('div');
+  t.className = isSquare ? 'target-square' : 'target';
+  t.dataset.score = isSquare ? 2 : 1;
+  t.dataset.hp = 3;
+  t.dataset.lastHit = '0';
+  t.style.left = (window.innerWidth + 50) + 'px';
+  t.style.top = (Math.random() * (window.innerHeight - 130) + 50) + 'px';
+
+  const healthBar = document.createElement('div');
+  healthBar.className = 'health-bar';
+  const healthFill = document.createElement('div');
+  healthFill.className = 'health-fill';
+  healthBar.appendChild(healthFill);
+  t.appendChild(healthBar);
+
+  document.body.appendChild(t);
+  targets.push(t);
+}
+
+for (let i = 0; i < 3; i++) createTarget();
+setInterval(() => { if (!paused) createTarget(); }, 3000);
+
+function reset() {
+  launched = false;
+  velocityX = velocityY = 0;
+  bounce = 0.7;
+  posX = 100;
+  posY = 300;
+  hello.style.left = posX + 'px';
+  hello.style.top = posY + 'px';
+  hello.style.cursor = 'grab';
+  hitId++;
+}
+
+function updateLine(x, y) {
+  const dx = startX - x;
+  const dy = startY - y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  line.style.width = length + 'px';
+  line.style.left = startX + 'px';
+  line.style.top = startY + 'px';
+  line.style.transformOrigin = '0 50%';
+  line.style.transform = `rotate(${angle}deg)`;
+}
+
+function launch(endX, endY) {
+  isDragging = false;
+  line.style.display = 'none';
+  velocityX = (startX - endX) * 0.3;
+  velocityY = (startY - endY) * 0.3;
+  launched = true;
+  hello.style.cursor = 'default';
+}
+
+// PC
+hello.addEventListener('mousedown', e => {
+  if (launched || paused || e.clientX > window.innerWidth / 2) return;
+  isDragging = true;
+  startX = e.clientX;
+  startY = e.clientY;
+  line.style.display = 'block';
+});
+
+// 터치 대응
+hello.addEventListener('touchstart', e => {
+  const touch = e.touches[0];
+  if (launched || paused || touch.clientX > window.innerWidth / 2) return;
+  isDragging = true;
+  startX = touch.clientX;
+  startY = touch.clientY;
+  line.style.display = 'block';
+});
+
+document.addEventListener('mousemove', e => { if (isDragging) updateLine(e.clientX, e.clientY); });
+document.addEventListener('touchmove', e => { if (isDragging) updateLine(e.touches[0].clientX, e.touches[0].clientY); });
+document.addEventListener('mouseup', e => { if (isDragging) launch(e.clientX, e.clientY); });
+document.addEventListener('touchend', e => { if (isDragging) launch(e.changedTouches[0].clientX, e.changedTouches[0].clientY); });
+
+function checkCollision(cx, cy, radius, rect) {
+  const rectX = rect.offsetLeft;
+  const rectY = rect.offsetTop;
+  const rectW = rect.offsetWidth;
+  const rectH = rect.offsetHeight;
+  const closestX = Math.max(rectX, Math.min(cx, rectX + rectW));
+  const closestY = Math.max(rectY, Math.min(cy, rectY + rectH));
+  return Math.hypot(cx - closestX, cy - closestY) < radius;
+}
+
+let animationRunning = false;
+function animate() {
+  if (animationRunning) return;
+  animationRunning = true;
+  function loop() {
+    if (paused) return requestAnimationFrame(loop);
+
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i];
+      let x = parseFloat(t.style.left);
+      x -= 0.3;
+      if (x < baseZone) {
+        t.remove();
+        targets.splice(i, 1);
+        score = Math.max(0, score - 1);
+        scoreDiv.textContent = 'Score: ' + score;
+      } else {
+        t.style.left = x + 'px';
+      }
+    }
+
+    for (let t of targets) {
+      const tl = parseFloat(t.style.left);
+      const tr = tl + t.offsetWidth;
+      const dl = defenseLine.offsetLeft;
+      const dr = dl + defenseLine.offsetWidth;
+      if (tr > dl && tl < dr) return showGameOver();
+    }
+
+    if (launched) {
+      velocityY += gravity;
+      velocityX *= friction;
+      velocityY *= friction;
+      posX += velocityX;
+      posY += velocityY;
+
+      const radius = hello.offsetWidth / 2;
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        if (checkCollision(posX + radius, posY + radius, radius, t)) {
+          if (t.dataset.lastHit != hitId) {
+            t.dataset.lastHit = hitId;
+            let hp = --t.dataset.hp;
+            t.querySelector('.health-fill').style.width = (hp / 3 * 100) + '%';
+            if (hp <= 0) {
+              score += parseInt(t.dataset.score);
+              scoreDiv.textContent = 'Score: ' + score;
+              t.remove();
+              targets.splice(i, 1);
+            }
+            bounce = Math.min(1, bounce + 0.1);
+            velocityX *= -bounce;
+            velocityY *= -bounce;
+          }
+        }
+      }
+
+      if (posY + hello.offsetHeight > window.innerHeight) {
+        posY = window.innerHeight - hello.offsetHeight;
+        velocityY *= -bounce;
+        velocityX *= bounce;
+        bounce *= 0.95;
+      }
+      if (posX < 0) {
+        posX = 0;
+        velocityX *= -bounce;
+        bounce *= 0.95;
+      }
+      if (posX + hello.offsetWidth > window.innerWidth) {
+        posX = window.innerWidth - hello.offsetWidth;
+        velocityX *= -bounce;
+        bounce *= 0.95;
+      }
+      hello.style.left = posX + 'px';
+      hello.style.top = posY + 'px';
+      if (bounce < 0.1 && posY + hello.offsetHeight >= window.innerHeight - 1) reset();
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+animate();
+reset();
+
+document.addEventListener('visibilitychange', () => {
+  paused = document.hidden;
+  if (!paused) animate();
+});
+
+window.addEventListener('resize', () => {
+  targets.forEach(t => t.remove());
+  targets.length = 0;
+  for (let i = 0; i < 3; i++) createTarget();
+});
+
+// --- 초월 스킨 연동 부분 ---
+
+// 초월 스킨 20개 데이터
+const transcendSkins = [
+  { name: "초월-불꽃", color: "orangered", font: "Impact" },
+  { name: "초월-빙결", color: "deepskyblue", font: "Arial Black" },
+  { name: "초월-번개", color: "gold", font: "Courier New" },
+  { name: "초월-대지", color: "saddlebrown", font: "Georgia" },
+  { name: "초월-폭풍", color: "slateblue", font: "Verdana" },
+  { name: "초월-어둠", color: "black", font: "Trebuchet MS" },
+  { name: "초월-빛", color: "white", font: "Lucida Console" },
+  { name: "초월-독", color: "purple", font: "Comic Sans MS" },
+  { name: "초월-시간", color: "silver", font: "Tahoma" },
+  { name: "초월-공간", color: "navy", font: "Palatino Linotype" },
+  { name: "초월-정령", color: "forestgreen", font: "Garamond" },
+  { name: "초월-금속", color: "gray", font: "Futura" },
+  { name: "초월-음속", color: "cyan", font: "Segoe UI" },
+  { name: "초월-용암", color: "crimson", font: "Rockwell" },
+  { name: "초월-눈보라", color: "lightblue", font: "Calibri" },
+  { name: "초월-환상", color: "mediumorchid", font: "Brush Script MT" },
+  { name: "초월-기계", color: "darkgray", font: "Roboto Mono" },
+  { name: "초월-유성", color: "firebrick", font: "Orbitron" },
+  { name: "초월-바다", color: "teal", font: "Quicksand" },
+  { name: "초월-우주", color: "darkslateblue", font: "Exo 2" }
+];
+
+// 기본 스킨 색상 매핑
+const colorMap = {
+  "기본": "white",
+  "빨강": "red",
+  "파랑": "blue",
+  "초록": "green",
+  "노랑": "yellow",
+  "보라": "purple",
+  "검정": "black",
+  "청록": "teal",
+  "핑크": "pink",
+  "레인보우": "linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet)"
+};
+
+// 로컬스토리지에서 선택된 일반 스킨과 초월 스킨 불러오기
+const selectedSkin = localStorage.getItem('helloSelectedSkin') || '기본';
+const selectedTransSkinName = localStorage.getItem('helloSelectedTransSkin') || '';
+
+// 초월 스킨 객체 찾기
+const selectedTransSkin = transcendSkins.find(s => s.name === selectedTransSkinName);
+
+// 스킨 적용 함수
+function applySkin() {
+  if (selectedTransSkin) {
+    // 초월 스킨이 있으면 초월 스킨 우선 적용
+    hello.style.color = selectedTransSkin.color;
+    hello.style.fontFamily = selectedTransSkin.font;
+    hello.style.backgroundImage = 'none';
+    hello.style.webkitBackgroundClip = '';
+    hello.style.webkitTextFillColor = '';
+  } else {
+    // 초월 스킨이 없으면 일반 스킨 적용
+    if (selectedSkin === '레인보우') {
+      hello.style.backgroundImage = colorMap['레인보우'];
+      hello.style.webkitBackgroundClip = "text";
+      hello.style.webkitTextFillColor = "transparent";
+      hello.style.color = 'unset'; // 배경그라데이션으로 처리하므로 기본 color 해제
+      hello.style.fontFamily = ''; // 기본 폰트 유지
+    } else {
+      hello.style.backgroundImage = 'none';
+      hello.style.webkitBackgroundClip = '';
+      hello.style.webkitTextFillColor = '';
+      hello.style.color = colorMap[selectedSkin] || 'white';
+      hello.style.fontFamily = '';
+    }
+  }
+}
+
+
+
+// 게임 시작 시 스킨 적용
+applySkin();
+
+</script>
+</body>
+</html>
